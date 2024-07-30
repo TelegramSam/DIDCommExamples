@@ -3,6 +3,12 @@ import random
 from didcomm_messaging import quickstart
 from pprint import pprint
 
+# This demo is used to show some advanced routing tools
+# run this, and paste the displayed DID into the DIDComm Demo (demo.didcomm.org)
+# Send a basicmessage containing 'count' to start the interesting process
+
+# Note: currently not working correctly, likely as a result of screwing up something with Futures.
+
 RELAY_DID = 'did:web:dev.cloudmediator.indiciotech.io'
 
 async def process_msg(msg):
