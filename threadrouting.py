@@ -1,18 +1,18 @@
 import asyncio
 import random
+import aiojobs
 from didcomm_messaging import quickstart
 from pprint import pprint
+import logging
 
+
+LOG = logging.getLogger('quickstart')
+LOG.setLevel(logging.DEBUG)
 # This demo is used to show some advanced routing tools
 # run this, and paste the displayed DID into the DIDComm Demo (demo.didcomm.org)
-# Send a basicmessage containing 'count' to start the interesting process
-
-# Note: currently not working correctly, likely as a result of screwing up something with Futures.
+# Send a basicmessage to interact
 
 RELAY_DID = 'did:web:dev.cloudmediator.indiciotech.io'
-
-async def process_msg(msg):
-    print("Received Message: ", msg["type"], msg["body"])
 
 class MessageRouter:
 
@@ -27,19 +27,24 @@ class MessageRouter:
 
     async def route_message(self, msg):
         msg_type = msg["type"]
-        if msg_type in self.routes:
-            for handler in self.routes[msg_type]:
-                await handler(msg)
-        else:
-            await self.unknown_handler(msg)
 
         # check instant routing
         fingerprint = f"{msg['from']}|{msg['type']}"
-        print(f".. checking for fingerprint {fingerprint}")
         if fingerprint in self.did_type:
-            print(f".. Found Instant Future!")
+            print("Routing ONCE message")
             msg_future = self.did_type[fingerprint]
             msg_future.set_result(msg)
+            del self.did_type[fingerprint] #remove the registered handler
+            return #don't regular process the 'once' messages. This could be optional
+
+
+        if msg_type in self.routes:
+            for handler in self.routes[msg_type]:
+                await scheduler.spawn(handler(msg)) # ends up in the background
+        else:
+            await self.unknown_handler(msg)
+
+
 
 
     async def unknown_handler(self, msg):
@@ -50,11 +55,7 @@ class MessageRouter:
         message_future = asyncio.get_running_loop().create_future()
 
         fingerprint = f"{from_did}|{msg_type}"
-
-        print(f".. waiting for fingerprint {fingerprint}")
-
         self.did_type[fingerprint] = message_future
-        pprint(self.did_type)
 
         return message_future # this can be awaited.
 
@@ -85,24 +86,26 @@ async def run_step_process(msg):
     print("starting step process")
     async def ask(ask_message):
         await sendBasicMessage(msg['from'], ask_message)
+        response_msg = await router.wait_for_message(msg['from'], "https://didcomm.org/basicmessage/2.0/message")
+        return response_msg['body']['content']
 
-    await ask("Send a basicmessage with color")
-    msg_1_future = router.wait_for_message(msg['from'], "https://didcomm.org/basicmessage/2.0/message")
-    print(f"future created {msg_1_future}")
-    msg_1 = await msg_1_future
-    print(f"got answer back {msg_1}")
+    color_1 = await ask("What is your favorite color?")
 
-    print(f"responded with color {msg_1['body']['content']}")
+    print(f"responded with color {color_1}")
 
+    color_2 = await ask(f"And your second favorite color, other than {color_1}?")
+
+    print(f"Two favorite Colors: {color_1} and {color_2}")
+    await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding.")
 
 
 async def basicMessage(msg):
-    #if message is anything other than 'count', then just display.
+    #if message is anything other than 'colors', then prompt.
     message_content = msg['body']['content']
-    if message_content == "count":
+    if message_content == "colors":
         await run_step_process(msg)
     else:
-        print(f"BasicMessage: {message_content}")
+        await sendBasicMessage(msg['from'], f"Send 'colors' to start the flow.")
 
 async def sendBasicMessage(to_did, msg):     # Send a message to target_did from the user
     message = {
@@ -118,11 +121,14 @@ async def sendBasicMessage(to_did, msg):     # Send a message to target_did from
 relayed_did = ""
 DMP = None
 router = None
+scheduler = None
 
 async def main():
     global DMP
     global relayed_did
     global router
+    global scheduler
+    scheduler = aiojobs.Scheduler()
     did, secrets = quickstart.generate_did()
 
     # Setup the didcomm-messaging-python library object
@@ -145,6 +151,7 @@ async def main():
         await quickstart.websocket_loop(DMP, did, RELAY_DID, router.route_message)
     except asyncio.exceptions.CancelledError:
         print("Shutting down Agent.")
+        await scheduler.close() 
     
     
 
