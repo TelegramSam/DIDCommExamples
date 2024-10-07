@@ -2,23 +2,40 @@ import functools
 import asyncio
 
 class NamedFunctionHandler:
+    """
+    Handles the registration and retrieval of named functions for specific DID and message type combinations.
+    """
+
     def __init__(self):
         self.registered_handlers = {}
 
     def register(self, from_did, msg_type, handler_name):
+        """
+        Register a handler name for a specific DID and message type combination.
+        """
         key = f"{from_did}|{msg_type}"
         self.registered_handlers[key] = handler_name
 
     def get_handler(self, from_did, msg_type):
+        """
+        Retrieve the handler name for a specific DID and message type combination.
+        """
         key = f"{from_did}|{msg_type}"
         return self.registered_handlers.get(key)
 
     def remove_handler(self, from_did, msg_type):
+        """
+        Remove the handler for a specific DID and message type combination.
+        """
         key = f"{from_did}|{msg_type}"
         if key in self.registered_handlers:
             del self.registered_handlers[key]
 
 class MessageRouter:
+    """
+    Routes messages based on their type and handles the execution of appropriate handlers.
+    """
+
     def __init__(self, _scheduler):
         self.routes = {}
         self.did_type = {}  # used for one time routing
@@ -28,6 +45,9 @@ class MessageRouter:
         self.handler_map = {}  # Store mapping of handler names to actual functions
     
     def add_route(self, msg_type, handler):
+        """
+        Add a route for a specific message type.
+        """
         if msg_type not in self.routes:
             self.routes[msg_type] = []
         handler_name = handler.__name__
@@ -35,17 +55,26 @@ class MessageRouter:
         self.handler_map[handler_name] = handler
 
     def add_message_route(self, msg_type):
+        """
+        Decorator for adding a message route.
+        """
         def decorator_route_message(func):
             self.add_route(msg_type, func)
             return func
         return decorator_route_message
 
     def register_handler(self, from_did, msg_type, handler):
+        """
+        Register a handler for a specific DID and message type combination.
+        """
         handler_name = handler.__name__
         self.named_function_handler.register(from_did, msg_type, handler_name)
         self.handler_map[handler_name] = handler
 
     async def route_message(self, msg):
+        """
+        Route a message to the appropriate handler(s).
+        """
         msg_type = msg["type"]
         from_did = msg["from"]
 
@@ -81,10 +110,16 @@ class MessageRouter:
             await self.unknown_handler(msg, context)
 
     async def unknown_handler(self, msg, context):
+        """
+        Handle unknown message types.
+        """
         print("Unknown Message: ", msg)
         print("Context: ", context)
 
     def wait_for_message(self, from_did, msg_type):
+        """
+        Wait for a specific message from a DID.
+        """
         # Create a new Future object.
         message_future = asyncio.get_running_loop().create_future()
 
