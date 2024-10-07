@@ -1,7 +1,7 @@
 import functools
 import asyncio
 
-class RegistrationHandler:
+class NamedFunctionHandler:
     def __init__(self):
         self.registered_handlers = {}
 
@@ -24,7 +24,7 @@ class MessageRouter:
         self.did_type = {}  # used for one time routing
         self.scheduler = _scheduler
         self.contexts = {}  # Store context for each sending DID
-        self.registration_handler = RegistrationHandler()
+        self.named_function_handler = NamedFunctionHandler()
         self.handler_map = {}  # Store mapping of handler names to actual functions
     
     def add_route(self, msg_type, handler):
@@ -42,7 +42,7 @@ class MessageRouter:
 
     def register_handler(self, from_did, msg_type, handler):
         handler_name = handler.__name__
-        self.registration_handler.register(from_did, msg_type, handler_name)
+        self.named_function_handler.register(from_did, msg_type, handler_name)
         self.handler_map[handler_name] = handler
 
     async def route_message(self, msg):
@@ -55,9 +55,9 @@ class MessageRouter:
         context = self.contexts[from_did]
 
         # Check for registered handler
-        handler_name = self.registration_handler.get_handler(from_did, msg_type)
+        handler_name = self.named_function_handler.get_handler(from_did, msg_type)
         if handler_name:
-            self.registration_handler.remove_handler(from_did, msg_type)
+            self.named_function_handler.remove_handler(from_did, msg_type)
             handler = self.handler_map.get(handler_name)
             if handler:
                 await self.scheduler.spawn(handler(msg, context))
