@@ -1,7 +1,7 @@
-import functools
 import asyncio
 
-class RegistrationHandler:
+
+class NamedFunctionHandler:
     def __init__(self):
         self.registered_handlers = {}
 
@@ -18,15 +18,16 @@ class RegistrationHandler:
         if key in self.registered_handlers:
             del self.registered_handlers[key]
 
+
 class MessageRouter:
     def __init__(self, _scheduler):
         self.routes = {}
         self.did_type = {}  # used for one time routing
         self.scheduler = _scheduler
         self.contexts = {}  # Store context for each sending DID
-        self.registration_handler = RegistrationHandler()
-        self.handler_map = {}  # Store mapping of handler names to actual functions
-    
+        self.named_function_handler = NamedFunctionHandler()
+        self.handler_map = {}  # Store mapping of handler names to functions
+
     def add_route(self, msg_type, handler):
         if msg_type not in self.routes:
             self.routes[msg_type] = []
@@ -42,7 +43,7 @@ class MessageRouter:
 
     def register_handler(self, from_did, msg_type, handler):
         handler_name = handler.__name__
-        self.registration_handler.register(from_did, msg_type, handler_name)
+        self.named_function_handler.register(from_did, msg_type, handler_name)
         self.handler_map[handler_name] = handler
 
     async def route_message(self, msg):
@@ -55,9 +56,9 @@ class MessageRouter:
         context = self.contexts[from_did]
 
         # Check for registered handler
-        handler_name = self.registration_handler.get_handler(from_did, msg_type)
+        handler_name = self.named_function_handler.get_handler(from_did, msg_type)
         if handler_name:
-            self.registration_handler.remove_handler(from_did, msg_type)
+            self.named_function_handler.remove_handler(from_did, msg_type)
             handler = self.handler_map.get(handler_name)
             if handler:
                 await self.scheduler.spawn(handler(msg, context))
@@ -68,9 +69,9 @@ class MessageRouter:
         if fingerprint in self.did_type:
             print("Routing ONCE message")
             msg_future = self.did_type[fingerprint]
-            msg_future.set_result((msg, context))  # Pass both msg and context
+            msg_future.set_result((msg, context))  # Pass msg and context
             del self.did_type[fingerprint]  # remove the registered handler
-            return  # don't regular process the 'once' messages. This could be optional
+            return  # don't process 'once' messages. This could be optional
 
         if msg_type in self.routes:
             for handler_name in self.routes[msg_type]:
