@@ -1,5 +1,5 @@
-import functools
 import asyncio
+
 
 class NamedFunctionHandler:
     def __init__(self):
@@ -18,6 +18,7 @@ class NamedFunctionHandler:
         if key in self.registered_handlers:
             del self.registered_handlers[key]
 
+
 class MessageRouter:
     def __init__(self, _scheduler):
         self.routes = {}
@@ -25,8 +26,8 @@ class MessageRouter:
         self.scheduler = _scheduler
         self.contexts = {}  # Store context for each sending DID
         self.named_function_handler = NamedFunctionHandler()
-        self.handler_map = {}  # Store mapping of handler names to actual functions
-    
+        self.handler_map = {}  # Store mapping of handler names to functions
+
     def add_route(self, msg_type, handler):
         if msg_type not in self.routes:
             self.routes[msg_type] = []
@@ -68,9 +69,9 @@ class MessageRouter:
         if fingerprint in self.did_type:
             print("Routing ONCE message")
             msg_future = self.did_type[fingerprint]
-            msg_future.set_result((msg, context))  # Pass both msg and context
+            msg_future.set_result((msg, context))  # Pass msg and context
             del self.did_type[fingerprint]  # remove the registered handler
-            return  # don't regular process the 'once' messages. This could be optional
+            return  # don't process 'once' messages. This could be optional
 
         if msg_type in self.routes:
             for handler_name in self.routes[msg_type]:
