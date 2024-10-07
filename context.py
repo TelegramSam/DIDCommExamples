@@ -1,6 +1,7 @@
 import abc
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+
 
 class ContextStorageEngine(abc.ABC):
     @abc.abstractmethod
@@ -15,47 +16,43 @@ class ContextStorageEngine(abc.ABC):
     def delete(self, key: str, context_type: str) -> None:
         pass
 
+
 class InMemoryContextStorage(ContextStorageEngine):
     def __init__(self):
-        self.contact_contexts = {}
-        self.thread_contexts = {}
+        self.contexts = {'contact': {}, 'thread': {}}
 
     def get(self, key: str, context_type: str) -> Optional[Dict[str, Any]]:
-        contexts = self.contact_contexts if context_type == 'contact' else self.thread_contexts
-        return contexts.get(key)
+        return self.contexts[context_type].get(key)
 
     def set(self, key: str, value: Any, context_type: str) -> None:
-        contexts = self.contact_contexts if context_type == 'contact' else self.thread_contexts
-        if key not in contexts:
-            contexts[key] = {}
-        contexts[key]['value'] = value
-        contexts[key]['timestamp'] = datetime.now().isoformat()
+        if key not in self.contexts[context_type]:
+            self.contexts[context_type][key] = {}
+        self.contexts[context_type][key]['value'] = value
+        self.contexts[context_type][key]['timestamp'] = datetime.now().isoformat()
 
     def delete(self, key: str, context_type: str) -> None:
-        contexts = self.contact_contexts if context_type == 'contact' else self.thread_contexts
-        if key in contexts:
-            del contexts[key]
+        if key in self.contexts[context_type]:
+            del self.contexts[context_type][key]
+
 
 class Context:
     def __init__(self, storage_engine: ContextStorageEngine):
         self.storage_engine = storage_engine
 
-    def get_contact_context(self, did: str) -> Optional[Any]:
-        context = self.storage_engine.get(did, 'contact')
-        return context['value'] if context else None
+    def get(self, key: str, context_type: str = 'thread') -> Optional[Tuple[Any, str, str]]:
+        thread_context = self.storage_engine.get(key, 'thread')
+        if thread_context:
+            return (thread_context['value'], 'thread', thread_context['timestamp'])
 
-    def set_contact_context(self, did: str, value: Any) -> None:
-        self.storage_engine.set(did, value, 'contact')
+        if context_type == 'thread':
+            contact_context = self.storage_engine.get(key, 'contact')
+            if contact_context:
+                return (contact_context['value'], 'contact', contact_context['timestamp'])
 
-    def get_thread_context(self, thid: str) -> Optional[Any]:
-        context = self.storage_engine.get(thid, 'thread')
-        return context['value'] if context else None
+        return None
 
-    def set_thread_context(self, thid: str, value: Any) -> None:
-        self.storage_engine.set(thid, value, 'thread')
+    def set(self, key: str, value: Any, context_type: str = 'thread') -> None:
+        self.storage_engine.set(key, value, context_type)
 
-    def delete_contact_context(self, did: str) -> None:
-        self.storage_engine.delete(did, 'contact')
-
-    def delete_thread_context(self, thid: str) -> None:
-        self.storage_engine.delete(thid, 'thread')
+    def delete(self, key: str, context_type: str = 'thread') -> None:
+        self.storage_engine.delete(key, context_type)
