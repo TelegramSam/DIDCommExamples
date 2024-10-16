@@ -18,7 +18,7 @@ RELAY_DID = 'did:web:dev.cloudmediator.indiciotech.io'
 #@router.add_message_route("https://didcomm.org/user-profile/1.0/profile")
 async def profile_display(msg, context):
     print(f"Profile: {msg['body']['profile']['displayName']}\n---------------\n")
-    print(f"Context: {context}")
+    print(f"Context: {context}") 
 
 async def profile_request(msg, context):
     response = {
