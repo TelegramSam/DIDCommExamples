@@ -15,7 +15,6 @@ LOG.setLevel(logging.DEBUG)
 
 RELAY_DID = 'did:web:dev.cloudmediator.indiciotech.io'
 
-#@router.add_message_route("https://didcomm.org/user-profile/1.0/profile")
 async def profile_display(msg, context):
     print(f"Profile: {msg['body']['profile']['displayName']}\n---------------\n")
     print(f"Context: {context}") 
@@ -55,31 +54,11 @@ async def run_step_process(msg):
 
     await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding.")
 
-# New functions for the step process
-
-async def start_new_step_process(msg, context):
-    print("Starting new step process")
-    await sendBasicMessage(msg['from'], "What is your favorite color? (New step process)")
-    router.register_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", handle_new_color_1)
-
-async def handle_new_color_1(msg, context):
-    color_1 = msg['body']['content']
-    context['new_color_1'] = color_1
-    print(f"First favorite color (New process): {color_1}")
-    await sendBasicMessage(msg['from'], f"And your second favorite color, other than {color_1}? (New step process)")
-    router.register_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", handle_new_color_2)
-
-async def handle_new_color_2(msg, context):
-    color_2 = msg['body']['content']
-    color_1 = context['new_color_1']
-    print(f"Two favorite Colors (New process): {color_1} and {color_2}")
-    await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding. (New step process)")
-    # We don't register a new handler here, so it will fall back to the default basicMessage handler
-
 
 async def basicMessage(msg, context):
     message_content = msg['body']['content'].lower()
 
+    # TODO: change context to a getter function, so we can assume None
     if 'step' not in context:
         context['step'] = None
 
@@ -116,6 +95,29 @@ async def sendBasicMessage(to_did, msg):     # Send a message to target_did from
     }
     await quickstart.send_http_message(DMP, relayed_did, message, target=to_did)
 
+# New functions for the step process
+
+async def start_new_step_process(msg, context):
+    print("Starting new step process")
+    await sendBasicMessage(msg['from'], "What is your favorite color? (New step process)")
+    router.register_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", handle_new_color_1)
+
+async def handle_new_color_1(msg, context):
+    color_1 = msg['body']['content']
+    context['new_color_1'] = color_1
+    print(f"First favorite color (New process): {color_1}")
+    await sendBasicMessage(msg['from'], f"And your second favorite color, other than {color_1}? (New step process)")
+    router.register_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", handle_new_color_2)
+
+async def handle_new_color_2(msg, context):
+    color_2 = msg['body']['content']
+    color_1 = context['new_color_1']
+    print(f"Two favorite Colors (New process): {color_1} and {color_2}")
+    await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding. (New step process)")
+    # We don't register a new handler here, so it will fall back to the default basicMessage handler
+
+
+
 relayed_did = ""
 DMP = None
 router = None
@@ -130,11 +132,13 @@ async def main():
     router = MessageRouter(scheduler)
     
     # Register handlers
+    # TODO: Add class based routers for whole protocols.
     router.add_route("https://didcomm.org/user-profile/1.0/profile", profile_display)
     router.add_route("https://didcomm.org/user-profile/1.0/request-profile", profile_request)
     router.add_route("https://didcomm.org/basicmessage/2.0/message", basicMessage)
 
     # Add other handlers to the handler_map
+    # TODO register named functions similar to add_route
     router.handler_map.update({
         "handle_new_color_1": handle_new_color_1,
         "handle_new_color_2": handle_new_color_2,

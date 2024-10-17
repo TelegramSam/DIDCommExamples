@@ -22,12 +22,12 @@ class NamedFunctionHandler:
 
 class MessageRouter:
     def __init__(self, _scheduler):
-        self.routes = {}
-        self.did_type = {}  # used for one time routing
+        self.routes = {} # routes are for persistant routing of messages by type
+        self.await_routes = {}  # used for one time routing, not horizontally scalable.
         self.scheduler = _scheduler
         self.context = Context(InMemoryContextStorage())
         self.named_function_handler = NamedFunctionHandler()
-        self.handler_map = {}  # Store mapping of handler names to functions
+        self.handler_map = {}  # Store mapping of handler names to functions, used for state machine like processing.
 
     def add_route(self, msg_type, handler):
         if msg_type not in self.routes:
@@ -36,6 +36,7 @@ class MessageRouter:
         self.routes[msg_type].append(handler_name)
         self.handler_map[handler_name] = handler
 
+    # used as a message decorator only. Not currently used in the examples
     def add_message_route(self, msg_type):
         def decorator_route_message(func):
             self.add_route(msg_type, func)
@@ -75,17 +76,17 @@ class MessageRouter:
             handler = self.handler_map.get(handler_name)
             if handler:
                 await self.scheduler.spawn(
-                    handler(msg, context, thread_context)
+                    handler(msg, context, thread_context) #TODO I think we should call it contact_context and thread_context
                 )
             return
 
         # check instant routing
         fingerprint = f"{from_did}|{msg_type}"
-        if fingerprint in self.did_type:
+        if fingerprint in self.await_routes:
             print("Routing ONCE message")
-            msg_future = self.did_type[fingerprint]
+            msg_future = self.await_routes[fingerprint]
             msg_future.set_result((msg, context, thread_context))
-            del self.did_type[fingerprint]  # remove the registered handler
+            del self.await_routes[fingerprint]  # remove the registered handler
             return  # don't process 'once' messages. This could be optional
 
         if msg_type in self.routes:
@@ -108,6 +109,6 @@ class MessageRouter:
         message_future = asyncio.get_running_loop().create_future()
 
         fingerprint = f"{from_did}|{msg_type}"
-        self.did_type[fingerprint] = message_future
+        self.await_routes[fingerprint] = message_future
 
         return message_future  # this can be awaited.
