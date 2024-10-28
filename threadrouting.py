@@ -139,7 +139,7 @@ async def main():
 
     # Add other handlers to the handler_map
     # TODO register named functions similar to add_route
-    router.handler_map.update({
+    router.named_handlers.update({
         "handle_new_color_1": handle_new_color_1,
         "handle_new_color_2": handle_new_color_2,
         "start_new_step_process": start_new_step_process,

@@ -1,9 +1,9 @@
 import psycopg2
 from psycopg2.extras import Json
 from typing import Any, Dict, Optional
-from context import ContextStorageEngine
+from context import ContextStorage
 
-class PostgreSQLContextStorage(ContextStorageEngine):
+class PostgreSQLContextStorage(ContextStorage):
     def __init__(self, connection_string):
         self.connection_string = connection_string
         self._create_tables()
