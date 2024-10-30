@@ -15,11 +15,10 @@ LOG.setLevel(logging.DEBUG)
 
 RELAY_DID = 'did:web:dev.cloudmediator.indiciotech.io'
 
-async def profile_display(msg, context):
+async def profile_display(msg, contact_context, thread_context):
     print(f"Profile: {msg['body']['profile']['displayName']}\n---------------\n")
-    print(f"Context: {context}") 
 
-async def profile_request(msg, context):
+async def profile_request(msg, contact_context, thread_context):
     response = {
         "type": "https://didcomm.org/user-profile/1.0/profile",
         # "id": str(uuid.uuid4()),
@@ -34,55 +33,49 @@ async def profile_request(msg, context):
         "thid": msg['id']
     }
     print(f"Requested Profile. Responding. \n {response}")
-    print(f"Context: {context}")
     await quickstart.send_http_message(DMP, relayed_did, response, target=msg['from'])
 
-async def run_step_process(msg):
+async def run_await_process(msg):
     # running a multi message process.
     print("starting step process")
     async def ask(ask_message):
         await sendBasicMessage(msg['from'], ask_message)
-        response_msg, response_context = await router.wait_for_message(msg['from'], "https://didcomm.org/basicmessage/2.0/message")
+        response_msg, response_contact_context, response_thread_context = await router.wait_for_message(msg['from'], "https://didcomm.org/basicmessage/2.0/message")
         #response_msg, response_context = await response_future
         return response_msg['body']['content']
 
-    color_1 = await ask("What is your favorite color?")
+    color_1 = await ask("What is your favorite color? (Await)")
     print(f"responded with color {color_1}")
 
-    color_2 = await ask(f"And your second favorite color, other than {color_1}?")
+    color_2 = await ask(f"And your second favorite color, other than {color_1}? (Await)")
     print(f"Two favorite Colors: {color_1} and {color_2}")
 
-    await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding.")
+    await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding. (Await)")
 
 
-async def basicMessage(msg, context):
+async def basicMessage(msg, contact_context, thread_context):
     message_content = msg['body']['content'].lower()
 
-    # TODO: change context to a getter function, so we can assume None
-    if 'step' not in context:
-        context['step'] = None
-
     if message_content == "await":
-        await run_step_process(msg)  
+        await run_await_process(msg)  
     elif message_content == "colors": 
-        context['step'] = 'start'
-        await sendBasicMessage(msg['from'], "What is your favorite color?")
+        contact_context.set('step', 'start')
+        await sendBasicMessage(msg['from'], "What is your favorite color? (Colors)")
     elif message_content == "step":
-        await start_new_step_process(msg, context)
-    elif context['step'] == 'start':
-        context['color_1'] = msg['body']['content']
-        context['step'] = 'second_color'
-        await sendBasicMessage(msg['from'], f"And your second favorite color, other than {context['color_1']}?")
-    elif context['step'] == 'second_color':
-        context['color_2'] = msg['body']['content']
-        context['step'] = 'complete'
-        await sendBasicMessage(msg['from'], f"Your two favorite colors are {context['color_1']} and {context['color_2']}. Thanks for responding.")
-        print(f"Two favorite Colors: {context['color_1']} and {context['color_2']}")
-        context['step'] = None  # Reset the step for future interactions
+        await start_new_step_process(msg, contact_context, thread_context)
+    elif contact_context.get('step') == 'start':
+        contact_context.set('color_1',  msg['body']['content'])
+        contact_context.set('step', 'second_color')
+        await sendBasicMessage(msg['from'], f"And your second favorite color, other than {contact_context.get('color_1')}? (Colors)")
+    elif contact_context.get('step') == 'second_color':
+        contact_context.set('color_2', msg['body']['content'])
+        contact_context.set('step', 'complete')
+        await sendBasicMessage(msg['from'], f"Your two favorite colors are {contact_context.get('color_1')} and {contact_context.get('color_2')}. Thanks for responding. (Colors)")
+        contact_context.set('step', None)  # Reset the step for future interactions
     else:
         await sendBasicMessage(msg['from'], "Send 'colors' to start the state flow, 'await' to start the await flow, or 'step' to start the new step process.")
 
-    print(f"Context after basicMessage: {context}")
+    print(f"Context after basicMessage: {contact_context}")
 
 async def sendBasicMessage(to_did, msg):     # Send a message to target_did from the user
     message = {
@@ -97,23 +90,23 @@ async def sendBasicMessage(to_did, msg):     # Send a message to target_did from
 
 # New functions for the step process
 
-async def start_new_step_process(msg, context):
+async def start_new_step_process(msg, contact_context, thread_context):
     print("Starting new step process")
-    await sendBasicMessage(msg['from'], "What is your favorite color? (New step process)")
-    router.register_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", handle_new_color_1)
+    router.engage_named_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", "handle_new_color_1")
+    await sendBasicMessage(msg['from'], "What is your favorite color? (Step)")
 
-async def handle_new_color_1(msg, context):
+async def handle_new_color_1(msg, contact_context, thread_context):
     color_1 = msg['body']['content']
-    context['new_color_1'] = color_1
+    contact_context.set('new_color_1', color_1)
     print(f"First favorite color (New process): {color_1}")
-    await sendBasicMessage(msg['from'], f"And your second favorite color, other than {color_1}? (New step process)")
-    router.register_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", handle_new_color_2)
+    router.engage_named_handler(msg['from'], "https://didcomm.org/basicmessage/2.0/message", "handle_new_color_2")
+    await sendBasicMessage(msg['from'], f"And your second favorite color, other than {color_1}? (Step)")
 
-async def handle_new_color_2(msg, context):
+async def handle_new_color_2(msg, contact_context, thread_context):
     color_2 = msg['body']['content']
-    color_1 = context['new_color_1']
+    color_1 = contact_context.get('new_color_1')
     print(f"Two favorite Colors (New process): {color_1} and {color_2}")
-    await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding. (New step process)")
+    await sendBasicMessage(msg['from'], f"Your two favorite colors are {color_1} and {color_2}. Thanks for responding. (Step)")
     # We don't register a new handler here, so it will fall back to the default basicMessage handler
 
 
@@ -138,13 +131,8 @@ async def main():
     router.add_route("https://didcomm.org/basicmessage/2.0/message", basicMessage)
 
     # Add other handlers to the handler_map
-    # TODO register named functions similar to add_route
-    router.named_handlers.update({
-        "handle_new_color_1": handle_new_color_1,
-        "handle_new_color_2": handle_new_color_2,
-        "start_new_step_process": start_new_step_process,
-        "run_step_process": run_step_process,
-    })
+    router.add_named_handler(handle_new_color_1, "handle_new_color_1")
+    router.add_named_handler(handle_new_color_2, "handle_new_color_2")
 
     did, secrets = quickstart.generate_did()
 

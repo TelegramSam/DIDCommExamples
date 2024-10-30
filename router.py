@@ -1,6 +1,5 @@
 import asyncio
-from context import Context, InMemoryContextStorage
-
+from context import InMemoryContextStorage
 
 class MessageRouter:
     def __init__(self, _scheduler):
@@ -14,8 +13,7 @@ class MessageRouter:
         # allow multiple handler functions to register to the same message type
         if msg_type not in self.routes:
             self.routes[msg_type] = []
-        handler_name = handler.__name__
-        self.routes[msg_type].append(handler_name)
+        self.routes[msg_type].append(handler)
 
     # used as a message decorator only. Not currently used in the examples
     def add_message_route(self, msg_type):
@@ -28,11 +26,10 @@ class MessageRouter:
         # only one handler per name
         self.named_handlers[name] = handler
 
-
     # used to engage named routes
-    def register_handler(self, from_did, msg_type, handler):
-        handler_name = handler.__name__
-        self.named_handlers[handler_name] = handler
+    def engage_named_handler(self, from_did, msg_type, handler_name):
+        routing_context = InMemoryContextStorage(("routing", from_did))
+        routing_context.set(msg_type, handler_name)
 
     # used for await routes
     def wait_for_message(self, from_did, msg_type):
@@ -43,11 +40,13 @@ class MessageRouter:
         self.await_routes[fingerprint] = message_future
 
         return message_future  # this can be awaited.
-
+    
     async def route_message(self, msg):
         msg_type = msg["type"]
         from_did = msg["from"]
         thid = msg.get("thid", None)
+
+        print(f"Routing - {msg_type}")
 
         # Get appropriate contexts
         contact_context = InMemoryContextStorage(("contact", from_did))
@@ -70,7 +69,7 @@ class MessageRouter:
                 )
             return
 
-        # check instant routing
+        # check await based routing
         fingerprint = f"{from_did}|{msg_type}"
         if fingerprint in self.await_routes:
             print("Routing ONCE message")
@@ -80,8 +79,7 @@ class MessageRouter:
             return  # don't process 'once' messages. This could be optional
 
         if msg_type in self.routes:
-            for handler_name in self.routes[msg_type]:
-                handler = self.named_handlers.get(handler_name)
+            for handler in self.routes[msg_type]:
                 if handler:
                     await self.scheduler.spawn(
                         handler(msg, contact_context, thread_context)
@@ -89,8 +87,8 @@ class MessageRouter:
         else:
             await self.unknown_handler(msg, contact_context, thread_context)
 
-    async def unknown_handler(self, msg, context, thread_context):
+    async def unknown_handler(self, msg, contact_context, thread_context):
         print("Unknown Message: ", msg)
-        print("Context: ", context)
+        print("Contact Context: ", contact_context)
         print("Thread Context: ", thread_context)
 
